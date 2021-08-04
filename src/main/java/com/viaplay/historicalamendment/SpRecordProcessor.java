@@ -7,11 +7,13 @@ import com.amazonaws.services.dynamodbv2.document.spec.GetItemSpec;
 import com.amazonaws.services.dynamodbv2.document.spec.UpdateItemSpec;
 import com.amazonaws.services.dynamodbv2.document.utils.ValueMap;
 import com.amazonaws.services.dynamodbv2.model.*;
+import com.viaplay.historicalamendment.model.RecordDao;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.stereotype.Component;
 
 import javax.annotation.PostConstruct;
+import java.sql.Timestamp;
 import java.util.Arrays;
 import java.util.Collection;
 import java.util.HashMap;
@@ -37,7 +39,10 @@ public class SpRecordProcessor implements RecordProcessor {
     }
 
     @Override
-    public String createHashKey(String userId, String profileId, String programGuid,  boolean isKids) {
+    public String createHashKey(RecordDao recordDao) {
+        String userId= recordDao.getUserId();
+        String profileId =recordDao.getProfileId();
+
         if (userId.equalsIgnoreCase(profileId)) {
             userId = profileId;
         } else {
@@ -47,18 +52,23 @@ public class SpRecordProcessor implements RecordProcessor {
         return userId;
     }
 
-    public boolean shouldUpdateRecord(String rawUserId, String profileId, String rawProgramGuid, boolean isKids) {
-        String userId = createHashKey(rawUserId, profileId, rawProgramGuid, isKids);
+    public boolean shouldUpdateRecord(RecordDao recordDao) {
+        String userId = createHashKey(recordDao);
+
         boolean shouldupdate = false;
         try {
             GetItemSpec itemSpec = new GetItemSpec()
-                    .withPrimaryKey(new PrimaryKey("userId", userId, "programGuid", rawProgramGuid));
+                    .withPrimaryKey(new PrimaryKey("userId", userId, "programGuid", recordDao.getProgramGuid()));
             Item spRecord = spTable.getItem(itemSpec);
             System.out.println(spRecord.toJSONPretty());
 
             Long position = spRecord.getLong("position");
             Long duration = spRecord.getLong("duration");
             String completed = spRecord.getString("completed");
+            System.out.println("SP timestamp jay: " +   spRecord.getString("ts"));
+            String timestamp = spRecord.getString("ts"); //TODO check the type to number
+            recordDao.setTimestamp(timestamp);
+
              shouldupdate = (position >= (WATCHED_THRESHOLD * duration));
             System.out.println("should continue ?  " + shouldupdate);
         } catch(Exception ex) {
@@ -74,20 +84,19 @@ public class SpRecordProcessor implements RecordProcessor {
 
 
     @Override
-    public <T> CompletableFuture<T> createUpdateQuery(String rawUserId, String profileId, String rawProgramGuid, String seriesGuid , boolean isKids) {
+    public <T> CompletableFuture<T> createUpdateQuery(RecordDao recordDao) {
 
 
         return (CompletableFuture<T>) CompletableFuture.supplyAsync(() -> {
 
-            String userId = createHashKey(rawUserId, profileId, rawProgramGuid, isKids);
+            String userId = createHashKey(recordDao);
                 HashMap<String, AttributeValue> spPrimaryKey = new HashMap<>();
-                spPrimaryKey.put("userId", new AttributeValue(userId)); //TODO chage to userId
-                spPrimaryKey.put("programGuid", new AttributeValue(rawProgramGuid)); //TODO chage to userId
+                spPrimaryKey.put("userId", new AttributeValue(userId));
+                spPrimaryKey.put("programGuid", new AttributeValue(recordDao.getProgramGuid()));
 
                 Map<String, AttributeValue> expressionAttributeValues = new HashMap<>();
                 expressionAttributeValues.put(":new_status", new AttributeValue("true"));
-
-                System.out.println("from SP ");
+                System.out.println("from SP !");
                 return new Update()
                         .withTableName(config.getStreamProgress())
                         .withKey(spPrimaryKey)

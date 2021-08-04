@@ -1,6 +1,7 @@
 package com.viaplay.historicalamendment;
 
 import com.amazonaws.services.dynamodbv2.model.*;
+import com.viaplay.historicalamendment.model.RecordDao;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.beans.factory.annotation.Qualifier;
 import org.springframework.boot.context.event.ApplicationReadyEvent;
@@ -56,7 +57,7 @@ public class AutoCorrectHistoricData {
     public void init() throws FileNotFoundException {
         String path = "/Users/soorjahr/Documents/historical-amendment/src/main/resources/failed_records.csv";
         csvOutputFile = new File(path); //TODO put into application param
-        pw= new PrintWriter(csvOutputFile);
+        pw = new PrintWriter(csvOutputFile);
     }
 
     @EventListener(ApplicationReadyEvent.class)
@@ -82,14 +83,17 @@ public class AutoCorrectHistoricData {
                 String seriesGuid = items[3];
                 boolean isKids = Boolean.getBoolean(items[7]);
                 System.out.println("->>>>>>>>>>>>>>>> user ID raw : " + userId);
-                if (!spRecordProcessor.shouldUpdateRecord(userId, profileId, programGuid, isKids)) {
+                RecordDao recordDaoBuilder = RecordDao.builder().userId(userId).
+                        profileId(profileId).programGuid(programGuid).seriesGuid(seriesGuid).isKids(isKids).build();
+
+                if (!spRecordProcessor.shouldUpdateRecord(recordDaoBuilder)) {
                     System.out.println("record skipped : " + userId);
                     continue;
                 }
 
                 List<CompletableFuture<T>> futureQuery = new ArrayList<>();
                 for (RecordProcessor recordProcessor : recordProcessors) {
-                    futureQuery.add(recordProcessor.createUpdateQuery(userId, profileId, programGuid, seriesGuid, isKids));
+                    futureQuery.add(recordProcessor.createUpdateQuery(recordDaoBuilder));
 
                 }
                 // Create a combined Future using allOf()
@@ -117,8 +121,7 @@ public class AutoCorrectHistoricData {
                     System.out.println(" transaction size : " + genericActions.size());
 
                     runInTranscation(genericActions, finalLine);
-                    Instant finish = Instant.now();
-                    System.out.println(" operation took: " + Duration.between(start, finish).toMinutes() + " to complete");
+
                 }).exceptionally(exception -> {
                     System.out.println("in exceptionally");
                     System.err.println(exception);
@@ -127,7 +130,8 @@ public class AutoCorrectHistoricData {
 
 
             }
-
+            Instant finish = Instant.now();
+            System.out.println(" operation took: " + Duration.between(start, finish).toMinutes() + " to complete");
             System.out.println("All Done!!!!!!!!!");
         } catch (IOException e) {
             e.printStackTrace();
@@ -161,7 +165,7 @@ public class AutoCorrectHistoricData {
     }
 
     private void writeToErrorQueue(String line) {
-        try  {
+        try {
             pw.println(line);
         } catch (Exception ex) {
             System.out.println(" unable to write in into the CSV file " + ex.getMessage());

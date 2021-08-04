@@ -7,6 +7,7 @@ import com.amazonaws.services.dynamodbv2.document.spec.GetItemSpec;
 import com.amazonaws.services.dynamodbv2.document.spec.UpdateItemSpec;
 import com.amazonaws.services.dynamodbv2.document.utils.ValueMap;
 import com.amazonaws.services.dynamodbv2.model.*;
+import com.viaplay.historicalamendment.model.RecordDao;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.stereotype.Component;
 
@@ -37,8 +38,12 @@ public class CwRecordProcessor implements RecordProcessor {
     }
 
     @Override
-    public String createHashKey(String userId, String profileId, String programGuid , boolean isKids) {
+    public String createHashKey(RecordDao recordDao) {
         //RecordProcessor.super.createUserId(userId;);
+        String userId = recordDao.getUserId();
+        String profileId = recordDao.getProfileId();
+        boolean isKids = recordDao.isKids();
+
         String suffix =  isKids ? "children": "default";
         String semicolon = "::";
         if (userId.equalsIgnoreCase(profileId)) {
@@ -51,16 +56,16 @@ public class CwRecordProcessor implements RecordProcessor {
     }
 
 
-    private String createRangeKey(String seriesGuid, String rawProgramGuid){
-        return seriesGuid.equalsIgnoreCase("") ? rawProgramGuid :seriesGuid ;
+    private String createRangeKey(RecordDao recordDao){
+        return recordDao.getSeriesGuid().equalsIgnoreCase("") ? recordDao.getProgramGuid() :recordDao.getSeriesGuid() ;
     }
 
-    public boolean shouldUpdateRecord(String rawUserId, String profileId, String rawProgramGuid, String seriesGuid, boolean isKids) {
+    public boolean shouldUpdateRecord(RecordDao recordDao) {
 
-        String hashKey = createHashKey(rawUserId, profileId, rawProgramGuid, isKids);
-        System.out.println( "from should update in CW11 hashkey" + hashKey + " - and program guid is :" + rawProgramGuid + "iskids :" + isKids);
+        String hashKey = createHashKey(recordDao);
+        System.out.println( "from should update in CW11 hashkey" + hashKey + " - and program guid is :" + recordDao.getProgramGuid() + "iskids :" + recordDao.isKids());
 
-        String secondaryKey = createRangeKey(seriesGuid,rawProgramGuid ) ;
+        String secondaryKey = createRangeKey(recordDao) ;
         Item cwRecord = null;
         try {
             GetItemSpec itemSpec = new GetItemSpec()
@@ -75,7 +80,7 @@ public class CwRecordProcessor implements RecordProcessor {
             String programGuid = cwRecord.getString("programGuid");
             Boolean completed = Boolean.valueOf(cwRecord.getString("completed"));
             System.out.println( "from CW " + cwRecord.toJSONPretty());
-            if(rawProgramGuid.equalsIgnoreCase(programGuid) && completed == false){
+            if(recordDao.getProgramGuid().equalsIgnoreCase(programGuid) && completed == false){
                 return true;
             }
         }
@@ -84,16 +89,16 @@ public class CwRecordProcessor implements RecordProcessor {
     }
 
     @Override
-    public CompletableFuture<Update> createUpdateQuery(String rawUserId, String profileId, String rawProgramGuid, String seriesGuid, boolean isKids) {
+    public CompletableFuture<Update> createUpdateQuery(RecordDao recordDao) {
 
         return CompletableFuture.supplyAsync(() -> {
             System.out.println("running CW");
-            if(!shouldUpdateRecord(rawUserId, profileId, rawProgramGuid, seriesGuid, isKids)){
+            if(!shouldUpdateRecord(recordDao)){
                 return null;
             }
 
-            String secondaryKey = createRangeKey(seriesGuid,rawProgramGuid ) ;
-            String hashKey = createHashKey(rawUserId, profileId, rawProgramGuid,isKids);
+            String secondaryKey = createRangeKey(recordDao) ;
+            String hashKey = createHashKey(recordDao);
             HashMap<String, AttributeValue> spPrimaryKey = new HashMap<>();
             spPrimaryKey.put("userId_sectionId", new AttributeValue(hashKey));
             spPrimaryKey.put("guid", new AttributeValue(secondaryKey));
