@@ -15,6 +15,8 @@ import com.amazonaws.services.dynamodbv2.document.*;
 import org.springframework.stereotype.Service;
 
 import java.io.IOException;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Collection;
 import java.util.List;
@@ -42,6 +44,7 @@ public class AutoCorrectHistoricData {
     private AtomicInteger count = new AtomicInteger(0);
 
     private File csvOutputFile;
+    private PrintWriter pw;
 
     public String convertToCSV(String[] data) {
         return java.util.stream.Stream.of(data).
@@ -50,17 +53,18 @@ public class AutoCorrectHistoricData {
     }
 
     @PostConstruct
-    public void init(){
-         csvOutputFile = new File(" failed_records"); //TODO put into application param
+    public void init() throws FileNotFoundException {
+        String path = "/Users/soorjahr/Documents/historical-amendment/src/main/resources/failed_records.csv";
+        csvOutputFile = new File(path); //TODO put into application param
+        pw= new PrintWriter(csvOutputFile);
     }
 
     @EventListener(ApplicationReadyEvent.class)
     public <T> void autoCorrectData() throws FileNotFoundException {
-
+        Instant start = Instant.now();
         String line = "";
         String cvsSplitBy = ",";
         BufferedReader br = new BufferedReader(new FileReader(CSV_PATH));
-     //   System.out.println(" ====================> x1 " + config.getStreamProgress());
 
         try (br) {
             int count = 0;
@@ -77,11 +81,9 @@ public class AutoCorrectHistoricData {
                 String programGuid = items[2];
                 String seriesGuid = items[3];
                 boolean isKids = Boolean.getBoolean(items[7]);
-
-
                 System.out.println("->>>>>>>>>>>>>>>> user ID raw : " + userId);
-                if(!spRecordProcessor.shouldUpdateRecord(userId, profileId, programGuid, isKids)){
-                    System.out.println( "record skipped : "+ userId);
+                if (!spRecordProcessor.shouldUpdateRecord(userId, profileId, programGuid, isKids)) {
+                    System.out.println("record skipped : " + userId);
                     continue;
                 }
 
@@ -92,6 +94,7 @@ public class AutoCorrectHistoricData {
                 }
                 // Create a combined Future using allOf()
                 //TODO handle child level exceptions
+                String finalLine = line;
                 CompletableFuture.allOf(
                         futureQuery.toArray(new CompletableFuture[futureQuery.size()])
                 ).thenAccept(ignored -> {
@@ -111,8 +114,11 @@ public class AutoCorrectHistoricData {
                                     filter(e -> e != null).
                                     collect(Collectors.toList());
 
-                    System.out.println( " transaction size : " + genericActions.size());
-                    runInTranscation(genericActions);
+                    System.out.println(" transaction size : " + genericActions.size());
+
+                    runInTranscation(genericActions, finalLine);
+                    Instant finish = Instant.now();
+                    System.out.println(" operation took: " + Duration.between(start, finish).toMinutes() + " to complete");
                 }).exceptionally(exception -> {
                     System.out.println("in exceptionally");
                     System.err.println(exception);
@@ -128,12 +134,12 @@ public class AutoCorrectHistoricData {
         }
     }
 
-    private void runInTranscation(Collection<TransactWriteItem> actions) {
+    private void runInTranscation(Collection<TransactWriteItem> actions, String line) {
         if (actions == null || actions.isEmpty()) {
             return;
         }
 
-        System.out.println("hey  0 0000 00000 : " + actions);
+        System.out.println("proceeding with transaction : " + actions);
         TransactWriteItemsRequest transactionRequest = new TransactWriteItemsRequest()
                 .withTransactItems(actions)
                 .withReturnConsumedCapacity(ReturnConsumedCapacity.TOTAL);
@@ -146,13 +152,22 @@ public class AutoCorrectHistoricData {
         } catch (Exception e) {
             e.printStackTrace();
             System.err.println("One of the table involved in the transaction is not found: " + e.getMessage());
-            //TODO exception block - put the damn thing in a failed CSV file
             // CSV Header : userId,profileId,productGuid,programTittle,position,duration,completedPercentage,nextEpisodeGuid
-
+            writeToErrorQueue(line);
 
         }
 
 
+    }
+
+    private void writeToErrorQueue(String line) {
+        try  {
+            pw.println(line);
+        } catch (Exception ex) {
+            System.out.println(" unable to write in into the CSV file " + ex.getMessage());
+        } finally {
+            pw.close();
+        }
     }
 
 

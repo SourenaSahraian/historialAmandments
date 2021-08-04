@@ -58,7 +58,8 @@ public class CwRecordProcessor implements RecordProcessor {
     public boolean shouldUpdateRecord(String rawUserId, String profileId, String rawProgramGuid, String seriesGuid, boolean isKids) {
 
         String hashKey = createHashKey(rawUserId, profileId, rawProgramGuid, isKids);
-        System.out.println( "from should update in CW11 hashkey" + hashKey + " - and program guid is :" + rawProgramGuid);
+        System.out.println( "from should update in CW11 hashkey" + hashKey + " - and program guid is :" + rawProgramGuid + "iskids :" + isKids);
+
         String secondaryKey = createRangeKey(seriesGuid,rawProgramGuid ) ;
         Item cwRecord = null;
         try {
@@ -84,11 +85,10 @@ public class CwRecordProcessor implements RecordProcessor {
 
     @Override
     public CompletableFuture<Update> createUpdateQuery(String rawUserId, String profileId, String rawProgramGuid, String seriesGuid, boolean isKids) {
-        //TODO check the condition -  return update query o.w null
 
         return CompletableFuture.supplyAsync(() -> {
             System.out.println("running CW");
-            if(!shouldUpdateRecord(rawUserId, profileId, rawProgramGuid, seriesGuid, true)){
+            if(!shouldUpdateRecord(rawUserId, profileId, rawProgramGuid, seriesGuid, isKids)){
                 return null;
             }
 

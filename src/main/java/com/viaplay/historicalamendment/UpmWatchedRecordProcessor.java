@@ -47,14 +47,17 @@ public class UpmWatchedRecordProcessor implements RecordProcessor {
 
 
     private boolean shouldUpdateRecordForUPM(String hashkey,  String rawProgramGuid) {
-
-        System.out.println("XXXXXXXXX1111 : ");
-        GetItemSpec itemSpec = new GetItemSpec()
-                .withPrimaryKey(new PrimaryKey("userId", hashkey, "programGuid", rawProgramGuid));
-        Item upmRecordExists = upmWatchedTable.getItem(itemSpec);
-        if(upmRecordExists != null){
-            System.out.println(upmRecordExists.toJSONPretty());
-            System.out.println("XXXXXXXXX : " + upmRecordExists);
+        Item upmRecordExists = null;
+        try{
+            GetItemSpec itemSpec = new GetItemSpec()
+                    .withPrimaryKey(new PrimaryKey("userId", hashkey, "programGuid", rawProgramGuid));
+             upmRecordExists = upmWatchedTable.getItem(itemSpec);
+            if(upmRecordExists != null){
+                System.out.println(upmRecordExists.toJSONPretty());
+                System.out.println("XXXXXXXXX : " + upmRecordExists);
+            }
+        } catch(Exception ex){
+            System.out.println(ex.getMessage());
         }
 
         return upmRecordExists !=null ? false:true;
@@ -74,9 +77,9 @@ public class UpmWatchedRecordProcessor implements RecordProcessor {
                   return null;
            }
             HashMap<String, AttributeValue> upmWatchedValues = new HashMap<>();
-            upmWatchedValues.put("userId", new AttributeValue(hashKey)); //TODO chage to userId
-            upmWatchedValues.put("programGuid", new AttributeValue(rawProgramGuid)); //TODO chage to userId
-            upmWatchedValues.put("metdadata", new AttributeValue("{}"));
+            upmWatchedValues.put("userId", new AttributeValue(hashKey));
+            upmWatchedValues.put("programGuid", new AttributeValue(rawProgramGuid));
+            upmWatchedValues.put("metadata", new AttributeValue("{}"));
             upmWatchedValues.put("ts", now());
 
             String primary = "userId";
@@ -86,6 +89,8 @@ public class UpmWatchedRecordProcessor implements RecordProcessor {
                     .withTableName(config.getUserProgramMarksWatched())
                     .withItem(upmWatchedValues)
                     .withConditionExpression("attribute_not_exists(" + primary + ") and attribute_not_exists(" + secondary + ")");
+
+
 
 
 

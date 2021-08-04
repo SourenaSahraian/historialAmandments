@@ -13,7 +13,7 @@ public class ApplicationConfig {
     @Getter @Setter
     private String streamProgress;
     @Getter @Setter
-    private String ContinueWatching;
+    private String continueWatching;
     @Getter @Setter
     private String userProgramMarks;
 

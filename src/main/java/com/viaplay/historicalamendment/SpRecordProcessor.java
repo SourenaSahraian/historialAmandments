@@ -49,18 +49,24 @@ public class SpRecordProcessor implements RecordProcessor {
 
     public boolean shouldUpdateRecord(String rawUserId, String profileId, String rawProgramGuid, boolean isKids) {
         String userId = createHashKey(rawUserId, profileId, rawProgramGuid, isKids);
-        GetItemSpec itemSpec = new GetItemSpec()
-                .withPrimaryKey(new PrimaryKey("userId", userId, "programGuid", rawProgramGuid));
-        Item spRecord = spTable.getItem(itemSpec);
-        System.out.println(spRecord.toJSONPretty());
+        boolean shouldupdate = false;
+        try {
+            GetItemSpec itemSpec = new GetItemSpec()
+                    .withPrimaryKey(new PrimaryKey("userId", userId, "programGuid", rawProgramGuid));
+            Item spRecord = spTable.getItem(itemSpec);
+            System.out.println(spRecord.toJSONPretty());
 
-        Long position = spRecord.getLong("position");
-        Long duration = spRecord.getLong("duration");
-        String completed = spRecord.getString("completed");
+            Long position = spRecord.getLong("position");
+            Long duration = spRecord.getLong("duration");
+            String completed = spRecord.getString("completed");
+             shouldupdate = (position >= (WATCHED_THRESHOLD * duration));
+            System.out.println("should continue ?  " + shouldupdate);
+        } catch(Exception ex) {
+            System.out.println( " error fecthing the SP record " + ex.getMessage());
+        }
 
 
-        boolean shouldupdate = (position >= (WATCHED_THRESHOLD * duration));
-        System.out.println("should continue ?  " + shouldupdate);
+
         return shouldupdate;
     }
 
